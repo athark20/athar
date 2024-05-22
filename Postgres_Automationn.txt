@@ -1,0 +1,97 @@
+import psycopg2
+import pandas as pd
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.base import MIMEBase
+from email import encoders
+import logging
+from datetime import datetime
+import os
+
+# Define the log path
+log_path = r'C:\\Users\\Pi Technologies\\Downloads\\Postgre_Logs'
+if not os.path.exists(log_path):
+    os.makedirs(log_path)
+
+# Set up logging
+log_format = '%(asctime)s - %(levelname)s - %(filename)s - %(funcName)s - %(lineno)d - %(message)s'
+log_file = f'{log_path}\\logfile_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log'
+logging.basicConfig(filename=log_file, level=logging.INFO, format=log_format)
+
+# Database connection details
+db_config = {
+    'dbname': 'dvdrental',
+    'user': 'postgres',
+    'password': 'A@kk9293',
+    'host': 'localhost',
+    'port': '5432'
+}
+
+# Email details
+email_config = {
+    'from_email': 'athar.khan201992@outlook.com',
+    'to_email': ['reachathar20@gmail.com', 'athar.khan201992@gmail.com'],
+    'subject': 'Automated Report',
+    'body': 'Please find the attached report.',
+    'smtp_server': 'smtp.office365.com',
+    'smtp_port': 587,
+    'smtp_user': 'athar.khan201992@outlook.com',
+    'smtp_password': 'aakk9293'
+}
+
+# SQL query
+query = 'SELECT * FROM public.actor order by actor_id ASC'
+
+def query_to_csv():
+    # Connect to the database
+    try:
+        logging.info("Connecting to the database.")
+        conn = psycopg2.connect(**db_config)
+        df = pd.read_sql_query(query, conn)
+        # Save to CSV
+        csv_file = 'report.csv'
+        df.to_csv(csv_file, index=False)
+        conn.close()
+        logging.info("Query executed successfully.")
+        return csv_file
+    except Exception as e:
+        logging.error(f"An error occurred while querying the database: {e}")
+        raise
+
+def send_email(csv_file):
+    # Create the email
+    try:
+        logging.info("Creating email.")
+        msg = MIMEMultipart()
+        msg['From'] = email_config['from_email']
+        msg['To'] = ', '.join(email_config['to_email'])
+        msg['Subject'] = email_config['subject']
+        msg.attach(MIMEText(email_config['body'], 'plain'))
+
+        # Attach the CSV file
+        attachment = MIMEBase('application', 'octet-stream')
+        with open(csv_file, 'rb') as file:
+            attachment.set_payload(file.read())
+        encoders.encode_base64(attachment)
+        attachment.add_header('Content-Disposition', f'attachment; filename={csv_file}')
+        msg.attach(attachment)
+
+        # Send the email
+        with smtplib.SMTP(email_config['smtp_server'], email_config['smtp_port']) as server:
+            server.starttls()
+            server.login(email_config['smtp_user'], email_config['smtp_password'])
+            server.send_message(msg)
+        logging.info("Email sent successfully.")
+    except Exception as e:
+        logging.error(f"An error occurred while sending the email: {e}")
+        raise
+
+if __name__ == '__main__':
+    try:
+        logging.info("Starting script.")
+        csv_file = query_to_csv()
+        send_email(csv_file)
+        logging.info("Script completed successfully.")
+    except Exception as e:
+        logging.error(f"An error occurred: {e}")
